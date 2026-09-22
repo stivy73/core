@@ -15,6 +15,7 @@ import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.maxrave.common.MEDIA_NOTIFICATION
@@ -75,6 +76,20 @@ internal class SimpleMediaService :
     override fun onCreate() {
         super.onCreate()
         Logger.w("Service", "Simple Media Service Created")
+
+        setListener(
+            object : MediaSessionService.Listener {
+                override fun onForegroundServiceStartNotAllowedException() {
+                    // Media3 reaches this callback when Android rejects startForeground(), most
+                    // commonly after an Android Auto or media-button request outlives the system's
+                    // temporary foreground-service allowlist. Playback cannot continue legally
+                    // without its media notification, so leave both the player and service in a
+                    // consistent stopped state instead of letting the process crash.
+                    Logger.e("Service", "Foreground service start denied; stopping playback")
+                    pauseAllPlayersAndStopSelf()
+                }
+            },
+        )
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider(
