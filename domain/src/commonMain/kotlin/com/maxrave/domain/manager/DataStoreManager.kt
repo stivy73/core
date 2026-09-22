@@ -60,6 +60,8 @@ interface DataStoreManager {
         value: String,
     )
 
+    val youtubeSession: Flow<YouTubeSession>
+
     val loggedIn: Flow<String>
     val cookie: Flow<String>
     val pageId: Flow<String>

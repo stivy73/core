@@ -24,6 +24,7 @@ import com.maxrave.domain.manager.DataStoreManager.Values.REPEAT_MODE_OFF
 import com.maxrave.domain.manager.DataStoreManager.Values.REPEAT_ONE
 import com.maxrave.domain.manager.DataStoreManager.Values.SIMPMUSIC
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
+import com.maxrave.domain.manager.YouTubeSession
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -175,6 +176,16 @@ internal class DataStoreManagerImpl(
             settings[stringPreferencesKey(key)] = value
         }
     }
+
+    override val youtubeSession: Flow<YouTubeSession> =
+        settingsDataStore.data.map { preferences ->
+            YouTubeSession(
+                loggedIn = preferences[LOGGED_IN] == TRUE,
+                cookie = preferences[COOKIE].orEmpty(),
+                pageId = preferences[PAGE_ID]?.ifEmpty { null },
+                authUser = preferences[AUTH_USER] ?: 0,
+            )
+        }
 
     override val loggedIn: Flow<String> =
         settingsDataStore.data.map { preferences ->

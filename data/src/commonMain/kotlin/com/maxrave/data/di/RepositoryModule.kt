@@ -2,12 +2,12 @@ package com.maxrave.data.di
 
 import com.maxrave.common.Config.SERVICE_SCOPE
 import com.maxrave.data.io.fileDir
+import com.maxrave.data.lyrics.LyricsRomanizerRepositoryImpl
 import com.maxrave.data.repository.AccountRepositoryImpl
 import com.maxrave.data.repository.AlbumRepositoryImpl
 import com.maxrave.data.repository.AnalyticsRepositoryImpl
 import com.maxrave.data.repository.ArtistRepositoryImpl
 import com.maxrave.data.repository.AutoEqRepositoryImpl
-import com.maxrave.data.lyrics.LyricsRomanizerRepositoryImpl
 import com.maxrave.data.repository.CommonRepositoryImpl
 import com.maxrave.data.repository.HomeRepositoryImpl
 import com.maxrave.data.repository.ImportRepositoryImpl
@@ -24,12 +24,12 @@ import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.AnalyticsRepository
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.AutoEqRepository
-import com.maxrave.domain.repository.LyricsRomanizerRepository
 import com.maxrave.domain.repository.CommonRepository
 import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.repository.ImportRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.LyricsCanvasRepository
+import com.maxrave.domain.repository.LyricsRomanizerRepository
 import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.PodcastRepository
 import com.maxrave.domain.repository.SearchRepository
@@ -46,7 +46,7 @@ val repositoryModule =
         }
 
         single<AlbumRepository>(createdAtStart = true) {
-            AlbumRepositoryImpl(get(), get())
+            AlbumRepositoryImpl(get(), get(), get())
         }
 
         single<ArtistRepository>(createdAtStart = true) {

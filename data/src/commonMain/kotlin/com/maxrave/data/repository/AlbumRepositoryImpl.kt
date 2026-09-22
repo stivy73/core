@@ -8,6 +8,7 @@ import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.FollowedArtistSingleAndAlbum
 import com.maxrave.domain.data.model.browse.album.AlbumBrowse
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.kotlinytmusicscraper.YouTube
@@ -15,6 +16,7 @@ import com.maxrave.kotlinytmusicscraper.models.AlbumItem
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -25,7 +27,25 @@ private const val TAG = "AlbumRepositoryImpl"
 internal class AlbumRepositoryImpl(
     private val localDataSource: LocalDataSource,
     private val youTube: YouTube,
+    private val dataStoreManager: DataStoreManager,
 ) : AlbumRepository {
+    override fun getYouTubeLibraryAlbums(): Flow<Resource<List<AlbumsResult>>> =
+        flow {
+            val session = dataStoreManager.youtubeSession.first()
+            if (!session.authenticated) {
+                emit(Resource.Success(emptyList()))
+                return@flow
+            }
+            val result = youTube.getLibraryAlbums(session)
+            if (dataStoreManager.youtubeSession.first() != session) return@flow
+            emit(
+                result.fold(
+                    onSuccess = { Resource.Success(it.map { album -> album.toAlbumsResult() }) },
+                    onFailure = { Resource.Error("Unable to load YouTube Music albums") },
+                ),
+            )
+        }.flowOn(Dispatchers.IO)
+
     override fun getAllAlbums(limit: Int): Flow<List<AlbumEntity>> =
         flow {
             emit(localDataSource.getAllAlbums(limit))

@@ -1,6 +1,7 @@
 package com.maxrave.kotlinytmusicscraper
 
 import com.maxrave.domain.extension.now
+import com.maxrave.domain.manager.YouTubeSession
 import com.maxrave.kotlinytmusicscraper.extractor.Extractor
 import com.maxrave.kotlinytmusicscraper.models.Context
 import com.maxrave.kotlinytmusicscraper.models.SongItem
@@ -18,10 +19,10 @@ import com.maxrave.kotlinytmusicscraper.models.body.FormData
 import com.maxrave.kotlinytmusicscraper.models.body.GetQueueBody
 import com.maxrave.kotlinytmusicscraper.models.body.GetSearchSuggestionsBody
 import com.maxrave.kotlinytmusicscraper.models.body.LikeBody
-import com.maxrave.kotlinytmusicscraper.models.body.SubscribeBody
 import com.maxrave.kotlinytmusicscraper.models.body.NextBody
 import com.maxrave.kotlinytmusicscraper.models.body.PlayerBody
 import com.maxrave.kotlinytmusicscraper.models.body.SearchBody
+import com.maxrave.kotlinytmusicscraper.models.body.SubscribeBody
 import com.maxrave.kotlinytmusicscraper.models.response.DownloadProgress
 import com.maxrave.kotlinytmusicscraper.models.response.RemoteConfig
 import com.maxrave.kotlinytmusicscraper.utils.parseCookieString
@@ -41,6 +42,7 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.accept
+import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.get
 import io.ktor.client.request.head
 import io.ktor.client.request.header
@@ -48,7 +50,6 @@ import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.prepareRequest
-import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsChannel
@@ -214,14 +215,15 @@ class Ytmusic {
         setLogin: Boolean = false,
         isUsingReferer: Boolean = true,
         customCookie: String? = null,
+        session: YouTubeSession? = null,
     ) {
         contentType(ContentType.Application.Json)
         headers {
             append("X-Goog-Api-Format-Version", "1")
             append("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
             append("X-YouTube-Client-Version", client.clientVersion)
-            append("X-Goog-Authuser", authUser.toString())
-            pageId?.let {
+            append("X-Goog-Authuser", (session?.authUser ?: authUser).toString())
+            (if (session != null) session.pageId else pageId)?.let {
                 append("X-Goog-Pageid", it)
             }
             append("x-origin", "https://music.youtube.com")
@@ -229,14 +231,15 @@ class Ytmusic {
                 append("Referer", client.referer)
             }
             if (setLogin) {
-                val cookie = customCookie ?: this@Ytmusic.cookie
+                val cookie = session?.cookie ?: customCookie ?: this@Ytmusic.cookie
+                val cookieMap = if (session != null) parseCookieString(session.cookie) else this@Ytmusic.cookieMap
                 cookie?.let { cookie ->
                     append("Cookie", cookie)
                     if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) return@let
                     val currentTime = now().toInstant(TimeZone.currentSystemDefault()).epochSeconds / 1000
                     val sapisidCookie = cookieMap["SAPISID"] ?: cookieMap["__Secure-3PAPISID"]
                     val sapisidHash = sha1("$currentTime $sapisidCookie https://music.youtube.com")
-                    Logger.d(TAG, "SAPI SID Hash: SAPISIDHASH ${currentTime}_$sapisidHash")
+                    if (session == null) Logger.d(TAG, "SAPI SID Hash: SAPISIDHASH ${currentTime}_$sapisidHash")
                     append("Authorization", "SAPISIDHASH ${currentTime}_$sapisidHash")
                 }
             }
@@ -699,8 +702,9 @@ class Ytmusic {
         continuation: String? = null,
         countryCode: String? = null,
         setLogin: Boolean = false,
+        session: YouTubeSession? = null,
     ) = httpClient.post("browse") {
-        ytClient(client, if (setLogin) true else cookie != "" && cookie != null, isUsingReferer = false)
+        ytClient(client, if (setLogin) true else cookie != "" && cookie != null, isUsingReferer = false, session = session)
 
         if (continuation != null && browseId != null) {
             setBody(

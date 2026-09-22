@@ -2,6 +2,7 @@ package com.maxrave.kotlinytmusicscraper
 
 import com.eygraber.uri.toKmpUri
 import com.maxrave.common.ITAG
+import com.maxrave.domain.manager.YouTubeSession
 import com.maxrave.kotlinytmusicscraper.YouTube.Companion.DEFAULT_VISITOR_DATA
 import com.maxrave.kotlinytmusicscraper.extension.toListFormat
 import com.maxrave.kotlinytmusicscraper.extractor.ExtractSource
@@ -40,20 +41,20 @@ import com.maxrave.kotlinytmusicscraper.models.response.AccountSwitcherEndpointR
 import com.maxrave.kotlinytmusicscraper.models.response.AddItemYouTubePlaylistResponse
 import com.maxrave.kotlinytmusicscraper.models.response.BrowseResponse
 import com.maxrave.kotlinytmusicscraper.models.response.CreatePlaylistResponse
-import com.maxrave.kotlinytmusicscraper.models.response.ImageUploadResponse
 import com.maxrave.kotlinytmusicscraper.models.response.DownloadProgress
 import com.maxrave.kotlinytmusicscraper.models.response.GetQueueResponse
 import com.maxrave.kotlinytmusicscraper.models.response.GetSearchSuggestionsResponse
+import com.maxrave.kotlinytmusicscraper.models.response.ImageUploadResponse
 import com.maxrave.kotlinytmusicscraper.models.response.LikeStatus
 import com.maxrave.kotlinytmusicscraper.models.response.NextAndroidMusicResponse
 import com.maxrave.kotlinytmusicscraper.models.response.NextResponse
 import com.maxrave.kotlinytmusicscraper.models.response.PipedResponse
 import com.maxrave.kotlinytmusicscraper.models.response.PlayerResponse
+import com.maxrave.kotlinytmusicscraper.models.response.RemoteConfig
 import com.maxrave.kotlinytmusicscraper.models.response.SearchResponse
 import com.maxrave.kotlinytmusicscraper.models.response.SimpMusicChartResponse
-import com.maxrave.kotlinytmusicscraper.models.response.TidalSearchResponse
 import com.maxrave.kotlinytmusicscraper.models.response.TidalOAuthResponse
-import com.maxrave.kotlinytmusicscraper.models.response.RemoteConfig
+import com.maxrave.kotlinytmusicscraper.models.response.TidalSearchResponse
 import com.maxrave.kotlinytmusicscraper.models.response.toLikeStatus
 import com.maxrave.kotlinytmusicscraper.models.response.toListAccountInfo
 import com.maxrave.kotlinytmusicscraper.models.simpmusic.FdroidResponse
@@ -68,6 +69,7 @@ import com.maxrave.kotlinytmusicscraper.pages.ArtistPage
 import com.maxrave.kotlinytmusicscraper.pages.ArtistSection
 import com.maxrave.kotlinytmusicscraper.pages.BrowseResult
 import com.maxrave.kotlinytmusicscraper.pages.ExplorePage
+import com.maxrave.kotlinytmusicscraper.pages.LibraryAlbumsPage
 import com.maxrave.kotlinytmusicscraper.pages.MoodAndGenres
 import com.maxrave.kotlinytmusicscraper.pages.NextPage
 import com.maxrave.kotlinytmusicscraper.pages.NextResult
@@ -94,6 +96,7 @@ import io.ktor.client.engine.http
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.URLBuilder
 import io.ktor.http.parseQueryString
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -1860,6 +1863,30 @@ class YouTube {
     ) = runCatching {
         ytMusic.pipedStreams(videoId, pipedInstance).body<PipedResponse>()
     }
+
+    /** Reads the complete remote library, never the local liked-album database. */
+    suspend fun getLibraryAlbums(session: YouTubeSession): Result<List<AlbumItem>> =
+        try {
+            check(session.authenticated) { "YouTube sign-in required" }
+            Result.success(
+                LibraryAlbumsPage.completed { continuation ->
+                    val response =
+                        ytMusic
+                            .browse(
+                                WEB_REMIX,
+                                browseId = if (continuation == null) "FEmusic_liked_albums" else null,
+                                continuation = continuation,
+                                setLogin = true,
+                                session = session,
+                            ).body<BrowseResponse>()
+                    LibraryAlbumsPage.fromResponse(response)
+                },
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
 
     suspend fun getLibraryPlaylists() =
         runCatching {

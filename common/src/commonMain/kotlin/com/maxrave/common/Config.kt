@@ -675,6 +675,7 @@ enum class LibraryChipType {
     WRAPPED,
     CHART,
     YOUTUBE_MUSIC_PLAYLIST,
+    YOUTUBE_MUSIC_ALBUM,
     YOUTUBE_MIX_FOR_YOU,
     LOCAL_PLAYLIST,
     FAVORITE_PLAYLIST,
@@ -685,6 +686,7 @@ enum class LibraryChipType {
     fun toStringValue(): String =
         when (this) {
             YOUR_LIBRARY -> "your_library"
+            YOUTUBE_MUSIC_ALBUM -> "youtube_music_album"
             YOUTUBE_MUSIC_PLAYLIST -> "youtube_music_playlist"
             YOUTUBE_MIX_FOR_YOU -> "youtube_mix_for_you"
             LOCAL_PLAYLIST -> "local_playlist"
@@ -699,6 +701,7 @@ enum class LibraryChipType {
         fun fromStringValue(value: String): LibraryChipType? =
             when (value) {
                 "your_library" -> YOUR_LIBRARY
+                "youtube_music_album" -> YOUTUBE_MUSIC_ALBUM
                 "youtube_music_playlist" -> YOUTUBE_MUSIC_PLAYLIST
                 "youtube_mix_for_you" -> YOUTUBE_MIX_FOR_YOU
                 "local_playlist" -> LOCAL_PLAYLIST

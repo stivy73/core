@@ -17,6 +17,8 @@ interface AlbumRepository {
 
     fun getLikedAlbums(): Flow<List<AlbumEntity>>
 
+    fun getYouTubeLibraryAlbums(): Flow<Resource<List<AlbumsResult>>>
+
     fun insertAlbum(albumEntity: AlbumEntity): Flow<Long>
 
     suspend fun updateAlbumLiked(

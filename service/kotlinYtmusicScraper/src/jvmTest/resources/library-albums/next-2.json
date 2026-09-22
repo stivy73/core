@@ -1,0 +1,55 @@
+{
+  "responseContext": {},
+  "continuationContents": {
+    "gridContinuation": {
+      "items": [
+        {
+          "musicTwoRowItemRenderer": {
+            "title": {
+              "runs": [
+                {
+                  "text": "Album MPRE_C"
+                }
+              ]
+            },
+            "subtitle": {
+              "runs": [
+                {
+                  "text": "Artist",
+                  "navigationEndpoint": {
+                    "browseEndpoint": {
+                      "browseId": "UC_artist"
+                    }
+                  }
+                }
+              ]
+            },
+            "thumbnailRenderer": {
+              "musicThumbnailRenderer": {
+                "thumbnail": {
+                  "thumbnails": [
+                    {
+                      "url": "https://example.invalid/cover.jpg",
+                      "width": 544,
+                      "height": 544
+                    }
+                  ]
+                }
+              }
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPRE_C",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
