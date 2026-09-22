@@ -67,4 +67,14 @@ class AiClient {
 
             result
         }
+
+    suspend fun explainSong(
+        title: String,
+        artist: String,
+        lyrics: String?,
+    ): Result<String> =
+        runCatching {
+            aiService?.explainSong(title, artist, lyrics)
+                ?: throw IllegalStateException("AI service is not initialized. Please set host and apiKey.")
+        }
 }

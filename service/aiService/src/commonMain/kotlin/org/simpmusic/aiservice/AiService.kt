@@ -169,7 +169,49 @@ class AiService(
         )
     }
 
+    suspend fun explainSong(
+        title: String,
+        artist: String,
+        lyrics: String?,
+    ): String {
+        val lyricsContext = lyrics?.trim()?.take(MAX_LYRICS_CONTEXT_LENGTH)
+        val request =
+            chatCompletionRequest {
+                this.model = this@AiService.model
+                messages {
+                    system {
+                        content =
+                            "You explain the meaning of songs in Italian. Describe themes, emotions, " +
+                                "imagery and possible interpretations. Clearly distinguish interpretation " +
+                                "from documented facts about the artist. Never invent background details, " +
+                                "do not reproduce lyrics, and say when the available information is insufficient."
+                    }
+                    user {
+                        content {
+                            text("Song: $title\nArtist: $artist")
+                        }
+                        content {
+                            text(
+                                lyricsContext?.let { "Lyrics for context:\n$it" }
+                                    ?: "No lyrics are available. Base the answer only on the title and artist.",
+                            )
+                        }
+                    }
+                }
+            }
+        return openAI
+            .chatCompletion(request)
+            .choices
+            .firstOrNull()
+            ?.message
+            ?.content
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: throw IllegalStateException("No response from AI")
+    }
+
     companion object {
+        private const val MAX_LYRICS_CONTEXT_LENGTH = 6000
         private val translationJsonSchema: JsonObject =
             buildJsonObject {
                 put("type", "object")

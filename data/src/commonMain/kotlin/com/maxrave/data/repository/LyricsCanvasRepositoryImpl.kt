@@ -654,6 +654,21 @@ internal class LyricsCanvasRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
+    override fun getSongExplanation(
+        title: String,
+        artist: String,
+        lyrics: String?,
+    ): Flow<Resource<String>> =
+        flow {
+            aiClient
+                .explainSong(title, artist, lyrics)
+                .onSuccess { explanation -> emit(Resource.Success(explanation)) }
+                .onFailure { throwable ->
+                    Logger.e("Song meaning", "Error: ${throwable.message}")
+                    emit(Resource.Error("Unable to explain this song"))
+                }
+        }.flowOn(Dispatchers.IO)
+
     // SimpMusic Lyrics
     private val simpMusicLyricsTag = "SimpMusicLyricsRepository"
 
