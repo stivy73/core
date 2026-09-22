@@ -30,10 +30,12 @@ import com.maxrave.common.MEDIA_CUSTOM_COMMAND
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.home.HomeItem
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.PlayerEvent
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
@@ -70,8 +72,10 @@ internal class SimpleMediaSessionCallback(
     private val songRepository: SongRepository,
     private val localPlaylistRepository: LocalPlaylistRepository,
     private val playlistRepository: PlaylistRepository,
+    private val albumRepository: AlbumRepository,
     private val homeRepository: HomeRepository,
     private val streamRepository: StreamRepository,
+    private val dataStoreManager: DataStoreManager,
 ) : MediaLibrarySession.Callback {
     var toggleLike: () -> Unit = {
         mediaPlayerHandler.toggleLike()
@@ -81,6 +85,9 @@ internal class SimpleMediaSessionCallback(
     }
     private val searchTempList = mutableListOf<Track>()
     private val listHomeItem = mutableListOf<HomeItem>()
+    private var favoriteTracks = emptyList<Track>()
+    private val albumTracks = mutableMapOf<String, List<Track>>()
+    private val albumTitles = mutableMapOf<String, String>()
 
     override fun onConnect(
         session: MediaSession,
@@ -228,6 +235,56 @@ internal class SimpleMediaSessionCallback(
         }
     }
 
+    /**
+     * Android Auto used to expose only SimpMusic's local likes here. YouTube Music keeps the
+     * account's liked songs in its authenticated LM playlist, so combine that remote source with
+     * the local database and deduplicate by video id. Remote entries win when both sources contain
+     * the same song because their metadata is the freshest account data.
+     */
+    private suspend fun loadFavoriteTracks(): List<Track> {
+        val merged = linkedMapOf<String, Track>()
+        if (dataStoreManager.youtubeSession.first().authenticated) {
+            when (
+                val remote =
+                    playlistRepository
+                        .getFullPlaylistData(YOUTUBE_LIKED_MUSIC_PLAYLIST_ID, context.getString(R.string.view_count))
+                        .lastOrNull()
+            ) {
+                is Resource.Success -> remote.data?.tracks.orEmpty().forEach { merged[it.videoId] = it }
+                is Resource.Error -> Logger.e(TAG, "Unable to load YouTube Music favorites: ${remote.message}")
+                null -> Logger.e(TAG, "Unable to load YouTube Music favorites: empty response")
+            }
+        }
+        songRepository
+            .getLikedSongs()
+            .first()
+            .map { it.toTrack() }
+            .forEach { merged.putIfAbsent(it.videoId, it) }
+        return merged.values.toList().also { favoriteTracks = it }
+    }
+
+    private suspend fun loadAlbumTracks(browseId: String): List<Track> {
+        albumTracks[browseId]?.let { return it }
+        return when (val result = albumRepository.getAlbumData(browseId).lastOrNull()) {
+            is Resource.Success -> {
+                val album = result.data
+                if (album == null) {
+                    emptyList()
+                } else {
+                    albumTitles[browseId] = album.title
+                    album.tracks.also { albumTracks[browseId] = it }
+                }
+            }
+
+            is Resource.Error -> {
+                Logger.e(TAG, "Unable to load album $browseId: ${result.message}")
+                emptyList()
+            }
+
+            null -> emptyList()
+        }
+    }
+
     override fun onGetLibraryRoot(
         session: MediaLibrarySession,
         browser: MediaSession.ControllerInfo,
@@ -331,11 +388,11 @@ internal class SimpleMediaSessionCallback(
                                 MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
                             ),
                             browsableMediaItem(
-                                SONG,
-                                context.getString(R.string.songs),
+                                ALBUM,
+                                context.getString(R.string.albums),
                                 null,
                                 drawableUri(R.drawable.baseline_album_24),
-                                MediaMetadata.MEDIA_TYPE_PLAYLIST,
+                                MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS,
                             ),
                             browsableMediaItem(
                                 FAVORITE,
@@ -346,17 +403,10 @@ internal class SimpleMediaSessionCallback(
                             ),
                             browsableMediaItem(
                                 DOWNLOADED,
-                                context.getString(R.string.downloaded),
+                                context.getString(R.string.downloads),
                                 null,
                                 drawableUri(R.drawable.baseline_downloaded),
                                 MediaMetadata.MEDIA_TYPE_PLAYLIST,
-                            ),
-                            browsableMediaItem(
-                                PLAYLIST,
-                                context.getString(R.string.playlists),
-                                null,
-                                drawableUri(R.drawable.baseline_playlist_add_24),
-                                MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS,
                             ),
                         )
                     }
@@ -370,10 +420,29 @@ internal class SimpleMediaSessionCallback(
                     }
 
                     FAVORITE -> {
-                        songRepository
-                            .getLikedSongs()
-                            .first()
-                            .map { it.toMediaItem(parentId) }
+                        loadFavoriteTracks().map { it.toMediaItemWithoutPath(parentId) }
+                    }
+
+                    ALBUM -> {
+                        when (val result = albumRepository.getYouTubeLibraryAlbums().lastOrNull()) {
+                            is Resource.Success ->
+                                result.data.orEmpty().map { album ->
+                                    browsableMediaItem(
+                                        "$ALBUM/${album.browseId}",
+                                        album.title,
+                                        album.artists.joinToString(", ") { it.name }.ifBlank { album.year },
+                                        album.thumbnails.lastOrNull()?.url?.toUri(),
+                                        MediaMetadata.MEDIA_TYPE_ALBUM,
+                                    )
+                                }
+
+                            is Resource.Error -> {
+                                Logger.e(TAG, "Unable to load YouTube Music albums: ${result.message}")
+                                emptyList()
+                            }
+
+                            null -> emptyList()
+                        }
                     }
 
                     DOWNLOADED -> {
@@ -519,6 +588,11 @@ internal class SimpleMediaSessionCallback(
                                 }
                             }
 
+                            parentId.startsWith("$ALBUM/") -> {
+                                val browseId = parentId.substringAfter("$ALBUM/").substringBefore('/')
+                                loadAlbumTracks(browseId).map { it.toMediaItemWithoutPath(parentId) }
+                            }
+
                             else -> {
                                 emptyList()
                             }
@@ -582,7 +656,7 @@ internal class SimpleMediaSessionCallback(
 
                 FAVORITE -> {
                     val songId = path.getOrNull(1) ?: return@future defaultResult
-                    val likedSongs = songRepository.getLikedSongs().first()
+                    val likedSongs = favoriteTracks.ifEmpty { loadFavoriteTracks() }
                     if (likedSongs.isEmpty()) {
                         defaultResult
                     } else {
@@ -592,14 +666,14 @@ internal class SimpleMediaSessionCallback(
                                 .firstOrNull { it.videoId == songId }
                                 ?.also {
                                     index = likedSongs.indexOf(it)
-                                }?.toTrack() ?: return@future defaultResult
+                                } ?: return@future defaultResult
                         mediaPlayerHandler.setQueueData(
                             QueueData.Data(
-                                listTracks = likedSongs.toArrayListTrack(),
+                                listTracks = ArrayList(likedSongs),
                                 firstPlayedTrack = clickedSong,
-                                playlistId = null,
+                                playlistId = YOUTUBE_LIKED_MUSIC_PLAYLIST_ID,
                                 playlistName = context.getString(R.string.favorites),
-                                playlistType = PlaylistType.LOCAL_PLAYLIST,
+                                playlistType = PlaylistType.PLAYLIST,
                                 continuation = null,
                             ),
                         )
@@ -610,6 +684,26 @@ internal class SimpleMediaSessionCallback(
                         )
                         defaultResult
                     }
+                }
+
+                ALBUM -> {
+                    val browseId = path.getOrNull(1) ?: return@future defaultResult
+                    val songId = path.getOrNull(2) ?: return@future defaultResult
+                    val tracks = loadAlbumTracks(browseId)
+                    val index = tracks.indexOfFirst { it.videoId == songId }
+                    val clickedSong = tracks.getOrNull(index) ?: return@future defaultResult
+                    mediaPlayerHandler.setQueueData(
+                        QueueData.Data(
+                            listTracks = ArrayList(tracks),
+                            firstPlayedTrack = clickedSong,
+                            playlistId = browseId,
+                            playlistName = albumTitles[browseId],
+                            playlistType = PlaylistType.ALBUM,
+                            continuation = null,
+                        ),
+                    )
+                    mediaPlayerHandler.loadMediaItem(clickedSong, Config.ALBUM_CLICK, index)
+                    defaultResult
                 }
 
                 DOWNLOADED -> {
@@ -864,10 +958,12 @@ internal class SimpleMediaSessionCallback(
         const val ROOT = "root"
         const val SONG = "song"
         const val HOME = "home"
+        const val ALBUM = "album"
         const val ONLINE_PLAYLIST = "online_playlist"
         const val PLAYLIST = "playlist"
         const val FAVORITE = "favorite"
         const val DOWNLOADED = "downloaded"
         const val MEDIA_SEARCH_SUPPORTED = "android.media.browse.SEARCH_SUPPORTED"
+        private const val YOUTUBE_LIKED_MUSIC_PLAYLIST_ID = "LM"
     }
 }

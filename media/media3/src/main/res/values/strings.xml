@@ -13,11 +13,13 @@
     <string name="library">Library</string>
     <string name="available_online">Available online</string>
     <string name="songs">Songs</string>
+    <string name="albums">Albums</string>
     <string name="favorites">Favorites</string>
     <string name="playlists">Playlists</string>
     <string name="track">track(s)</string>
     <string name="download">Download</string>
     <string name="downloaded">Downloaded</string>
+    <string name="downloads">Downloads</string>
     <string name="view_count">%1$s views</string>
     <string name="song">Song</string>
     <plurals name="n_song">

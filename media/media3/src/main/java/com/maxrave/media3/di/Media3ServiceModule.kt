@@ -52,6 +52,7 @@ import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.player.MediaPlayerInterface
+import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.CacheRepository
 import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
@@ -217,8 +218,10 @@ private val mediaServiceModule =
                 get<SongRepository>(),
                 get<LocalPlaylistRepository>(),
                 get<PlaylistRepository>(),
+                get<AlbumRepository>(),
                 get<HomeRepository>(),
                 get<StreamRepository>(),
+                get<DataStoreManager>(),
             )
         }
 

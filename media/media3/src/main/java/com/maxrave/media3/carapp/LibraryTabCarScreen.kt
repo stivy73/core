@@ -38,8 +38,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * Library root recreating the classic Android Auto tab bar (Home / Downloaded /
- * Favorites / Playlists). The Home tab renders each classic shelf as a titled
+ * Library root recreating the Android Auto tab bar (Home / Albums / Favorites /
+ * Downloads). The Home tab renders each classic shelf as a titled
  * [GridSection] inside a [SectionedItemTemplate]; the other tabs stay as flat
  * lists. All content comes from the same classic browse tree served through
  * [SimpleMediaSessionCallback]; browsable items push [MediaListCarScreen].
@@ -187,6 +187,9 @@ internal class LibraryTabCarScreen(
                             if (tabContentId == SimpleMediaSessionCallback.HOME) {
                                 loadHomeShelves()
                             } else {
+                                // Account-backed albums and favorites, plus downloads, can change
+                                // while the car session remains alive. Reload on each selection.
+                                tabChildren.remove(tabContentId)
                                 loadTab(tabContentId)
                             }
                             invalidate()
@@ -353,9 +356,9 @@ internal class LibraryTabCarScreen(
         private val TABS =
             listOf(
                 LibraryTab(SimpleMediaSessionCallback.HOME, R.string.home, R.drawable.home_android_auto),
-                LibraryTab(SimpleMediaSessionCallback.DOWNLOADED, R.string.downloaded, R.drawable.baseline_downloaded),
+                LibraryTab(SimpleMediaSessionCallback.ALBUM, R.string.albums, R.drawable.baseline_album_24),
                 LibraryTab(SimpleMediaSessionCallback.FAVORITE, R.string.favorites, R.drawable.baseline_favorite_24),
-                LibraryTab(SimpleMediaSessionCallback.PLAYLIST, R.string.playlists, R.drawable.baseline_playlist_add_24),
+                LibraryTab(SimpleMediaSessionCallback.DOWNLOADED, R.string.downloads, R.drawable.baseline_downloaded),
             )
     }
 }
