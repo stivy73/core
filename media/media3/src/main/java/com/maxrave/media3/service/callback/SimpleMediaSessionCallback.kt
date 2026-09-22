@@ -515,27 +515,42 @@ internal class SimpleMediaSessionCallback(
                                         }
                                     homeItem
                                         ?.contents
-                                        ?.filter { it?.playlistId != null || it?.videoId != null }
+                                        ?.filter {
+                                            it?.browseId?.startsWith("MPRE") == true ||
+                                                !it?.playlistId.isNullOrBlank() ||
+                                                !it?.videoId.isNullOrBlank()
+                                        }
                                         ?.mapNotNull {
-                                            if (it?.playlistId != null) {
-                                                browsableMediaItem(
-                                                    id = "$HOME/${homeItem.title}/$PLAYLIST/${it.playlistId}",
-                                                    title = it.title,
-                                                    subtitle = it.description,
-                                                    iconUri =
-                                                        it.thumbnails
-                                                            .lastOrNull()
-                                                            ?.url
-                                                            ?.toUri(),
-                                                    mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST,
-                                                )
-                                            } else if (it?.videoId != null) {
-                                                it
-                                                    .toTrack()
-                                                    .toSongEntity()
-                                                    .toMediaItem("$HOME/${homeItem.title}/$SONG")
-                                            } else {
-                                                null
+                                            when {
+                                                it?.browseId?.startsWith("MPRE") == true ->
+                                                    browsableMediaItem(
+                                                        id = "$ALBUM/${it.browseId}",
+                                                        title = it.title,
+                                                        subtitle =
+                                                            it.artists
+                                                                ?.joinToString(", ") { artist -> artist.name }
+                                                                ?.takeIf { artists -> artists.isNotBlank() }
+                                                                ?: it.description,
+                                                        iconUri = it.thumbnails.lastOrNull()?.url?.toUri(),
+                                                        mediaType = MediaMetadata.MEDIA_TYPE_ALBUM,
+                                                    )
+
+                                                !it?.playlistId.isNullOrBlank() ->
+                                                    browsableMediaItem(
+                                                        id = "$HOME/${homeItem.title}/$PLAYLIST/${it.playlistId}",
+                                                        title = it.title,
+                                                        subtitle = it.description,
+                                                        iconUri = it.thumbnails.lastOrNull()?.url?.toUri(),
+                                                        mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST,
+                                                    )
+
+                                                !it?.videoId.isNullOrBlank() ->
+                                                    it
+                                                        .toTrack()
+                                                        .toSongEntity()
+                                                        .toMediaItem("$HOME/${homeItem.title}/$SONG")
+
+                                                else -> null
                                             }
                                         }
                                         ?: emptyList()
