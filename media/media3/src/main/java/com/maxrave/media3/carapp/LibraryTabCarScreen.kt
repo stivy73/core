@@ -40,8 +40,9 @@ import org.koin.core.component.inject
 /**
  * Library root recreating the Android Auto tab bar (Home / Albums / Favorites /
  * Downloads). The Home tab renders each classic shelf as a titled
- * [GridSection] inside a [SectionedItemTemplate]; the other tabs stay as flat
- * lists. All content comes from the same classic browse tree served through
+ * [GridSection] inside a [SectionedItemTemplate]. Albums use the same large
+ * grid treatment, while Favorites and Downloads stay as flat lists. All content comes
+ * from the same classic browse tree served through
  * [SimpleMediaSessionCallback]; browsable items push [MediaListCarScreen].
  */
 @UnstableApi
@@ -210,10 +211,10 @@ internal class LibraryTabCarScreen(
             )
         }
         val content =
-            if (activeTabId == SimpleMediaSessionCallback.HOME) {
-                buildHomeSections()
-            } else {
-                buildActiveTabList()
+            when (activeTabId) {
+                SimpleMediaSessionCallback.HOME -> buildHomeSections()
+                SimpleMediaSessionCallback.ALBUM -> buildAlbumsGrid()
+                else -> buildActiveTabList()
             }
         return templateBuilder
             .setTabContents(TabContents.Builder(content).build())
@@ -287,6 +288,41 @@ internal class LibraryTabCarScreen(
                     screenManager.push(NowPlayingCarScreen(carContext))
                 }
             }.build()
+    }
+
+    /** Albums: match Home's large artwork grid while keeping a single library section. */
+    private fun buildAlbumsGrid(): Template {
+        val children = tabChildren[SimpleMediaSessionCallback.ALBUM]
+        if (children == null) {
+            return SectionedItemTemplate
+                .Builder()
+                .addAction(searchFab())
+                .addAction(nowPlayingFab())
+                .setLoading(true)
+                .build()
+        }
+        if (children.isEmpty()) {
+            return ListTemplate
+                .Builder()
+                .addAction(searchFab())
+                .addAction(nowPlayingFab())
+                .setSingleList(ItemList.Builder().setNoItemsMessage("Nothing to show").build())
+                .build()
+        }
+        val section =
+            GridSection
+                .Builder()
+                .setItemSize(GridSection.ITEM_SIZE_EXTRA_LARGE)
+                .setTitle(carContext.getString(R.string.albums))
+        children.take(carContext.listContentLimit()).forEach { item ->
+            section.addItem(buildGridItem(item))
+        }
+        return SectionedItemTemplate
+            .Builder()
+            .addAction(searchFab())
+            .addAction(nowPlayingFab())
+            .addSection(section.build())
+            .build()
     }
 
     private fun buildActiveTabList(): ListTemplate {
