@@ -9,6 +9,7 @@ import androidx.car.app.model.GridItem
 import androidx.car.app.model.GridSection
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
+import androidx.car.app.model.RowSection
 import androidx.car.app.model.SectionedItemTemplate
 import androidx.car.app.model.Tab
 import androidx.car.app.model.TabContents
@@ -321,24 +322,35 @@ internal class LibraryTabCarScreen(
             .Builder()
             .addAction(searchFab())
             .addAction(nowPlayingFab())
+            .setAlphabeticalIndexingStrategy(
+                SectionedItemTemplate.ALPHABETICAL_INDEXING_TITLE_IGNORE_ARTICLES_AND_SYMBOLS,
+            ).setScrollStatePersistenceStrategy(SectionedItemTemplate.SCROLL_STATE_PRESERVE_INDEX)
             .addSection(section.build())
             .build()
     }
 
-    private fun buildActiveTabList(): ListTemplate {
-        val listBuilder =
-            ListTemplate
+    private fun buildActiveTabList(): Template {
+        val templateBuilder =
+            SectionedItemTemplate
                 .Builder()
                 .addAction(searchFab())
                 .addAction(nowPlayingFab())
-        val children = tabChildren[activeTabId] ?: return listBuilder.setLoading(true).build()
+        val children = tabChildren[activeTabId] ?: return templateBuilder.setLoading(true).build()
+        if (children.isEmpty()) {
+            return ListTemplate
+                .Builder()
+                .addAction(searchFab())
+                .addAction(nowPlayingFab())
+                .setSingleList(ItemList.Builder().setNoItemsMessage("Nothing to show").build())
+                .build()
+        }
         val nowPlayingId = handler.nowPlaying.value?.mediaId
-        val itemListBuilder = ItemList.Builder().setNoItemsMessage("Nothing to show")
+        val section = RowSection.Builder()
         children.take(carContext.listContentLimit()).forEach { item ->
             val browsable = item.mediaMetadata.isBrowsable == true
             // Browse media ids are paths ("song/{videoId}"); nowPlaying uses the bare videoId
             val isPlaying = !browsable && item.mediaId.substringAfterLast('/') == nowPlayingId
-            itemListBuilder.addItem(
+            section.addItem(
                 carContext.mediaRow(item, artwork[item.mediaId], isPlaying) {
                     if (browsable) {
                         val title = item.mediaMetadata.title?.toString().orEmpty().ifBlank { item.mediaId }
@@ -351,7 +363,12 @@ internal class LibraryTabCarScreen(
                 },
             )
         }
-        return listBuilder.setSingleList(itemListBuilder.build()).build()
+        return templateBuilder
+            .setAlphabeticalIndexingStrategy(
+                SectionedItemTemplate.ALPHABETICAL_INDEXING_TITLE_IGNORE_ARTICLES_AND_SYMBOLS,
+            ).setScrollStatePersistenceStrategy(SectionedItemTemplate.SCROLL_STATE_PRESERVE_INDEX)
+            .addSection(section.build())
+            .build()
     }
 
     // List templates allow up to 2 floating actions: search on top of the
