@@ -10,7 +10,11 @@ import androidx.car.app.model.Template
 import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.media3.common.Player
+import com.maxrave.common.Config.MAIN_PLAYER
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
+import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.media3.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +23,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import org.koin.core.qualifier.named
 
 /**
  * Now-playing screen for Android Auto. The host renders artwork, seek bar and
@@ -32,12 +37,25 @@ internal class NowPlayingCarScreen(
 ) : Screen(carContext),
     KoinComponent {
     private val handler: MediaPlayerHandler by inject()
+    private val player: Player by inject(named(MAIN_PLAYER))
+    private val lyricsCanvasRepository: LyricsCanvasRepository by inject()
+    private val dataStoreManager: DataStoreManager by inject()
     private val screenScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val songMeaningSpeech by lazy {
+        SongMeaningCarSpeech(
+            context = carContext,
+            player = player,
+            repository = lyricsCanvasRepository,
+            dataStoreManager = dataStoreManager,
+            scope = screenScope,
+        )
+    }
 
     init {
         lifecycle.addObserver(
             object : DefaultLifecycleObserver {
                 override fun onDestroy(owner: LifecycleOwner) {
+                    songMeaningSpeech.stop()
                     screenScope.cancel()
                 }
             },
@@ -59,6 +77,18 @@ internal class NowPlayingCarScreen(
                 Header
                     .Builder()
                     .setTitle(queueTitle ?: "Queue")
+                    .addEndHeaderAction(
+                        Action
+                            .Builder()
+                            .setIcon(
+                                CarIcon
+                                    .Builder(
+                                        IconCompat.createWithResource(carContext, R.drawable.ic_car_song_meaning),
+                                    ).build(),
+                            ).setOnClickListener {
+                                screenManager.push(SongMeaningCarScreen(carContext, songMeaningSpeech))
+                            }.build(),
+                    )
                     .addEndHeaderAction(
                         Action
                             .Builder()
