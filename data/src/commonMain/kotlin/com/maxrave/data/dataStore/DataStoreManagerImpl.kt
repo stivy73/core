@@ -1319,6 +1319,19 @@ internal class DataStoreManagerImpl(
             preferences[AI_API_KEY] ?: ""
         }
 
+    override suspend fun setSongMeaningTtsProvider(provider: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[SONG_MEANING_TTS_PROVIDER] = provider
+            }
+        }
+    }
+
+    override val songMeaningTtsProvider: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[SONG_MEANING_TTS_PROVIDER] ?: DataStoreManager.SONG_MEANING_TTS_ANDROID
+        }
+
     override val useAITranslation: Flow<String> =
         settingsDataStore.data.map { preferences ->
             preferences[USE_AI_TRANSLATION] ?: FALSE
@@ -1844,6 +1857,7 @@ internal class DataStoreManagerImpl(
         val VISITOR_DATA = stringPreferencesKey("visitor_data")
         val AI_PROVIDER = stringPreferencesKey("ai_provider")
         val AI_API_KEY = stringPreferencesKey("ai_gemini_api_key")
+        val SONG_MEANING_TTS_PROVIDER = stringPreferencesKey("song_meaning_tts_provider")
 
         val CUSTOM_MODEL_ID = stringPreferencesKey("custom_model_id")
         val CUSTOM_OPENAI_BASE_URL = stringPreferencesKey("custom_openai_base_url")
