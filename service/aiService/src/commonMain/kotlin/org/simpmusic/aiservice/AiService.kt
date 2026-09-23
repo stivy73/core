@@ -181,19 +181,21 @@ class AiService(
                 messages {
                     system {
                         content =
-                            "You explain the meaning of songs in Italian. Describe themes, emotions, " +
-                                "imagery and possible interpretations. Clearly distinguish interpretation " +
-                                "from documented facts about the artist. Never invent background details, " +
-                                "do not reproduce lyrics, and say when the available information is insufficient."
+                            "Spiega il significato delle canzoni scrivendo esclusivamente in italiano, " +
+                                "anche se il titolo o il testo sono in un'altra lingua. Descrivi temi, " +
+                                "emozioni, immagini e possibili interpretazioni. Distingui chiaramente " +
+                                "le interpretazioni dai fatti documentati sull'artista. Non inventare " +
+                                "retroscena, non riprodurre versi e segnala quando le informazioni " +
+                                "disponibili non bastano per una conclusione affidabile."
                     }
                     user {
                         content {
-                            text("Song: $title\nArtist: $artist")
+                            text("Canzone: $title\nArtista: $artist")
                         }
                         content {
                             text(
-                                lyricsContext?.let { "Lyrics for context:\n$it" }
-                                    ?: "No lyrics are available. Base the answer only on the title and artist.",
+                                lyricsContext?.let { "Testo della canzone, solo come contesto:\n$it" }
+                                    ?: "Il testo non è disponibile. Basati solo sul titolo e sull'artista.",
                             )
                         }
                     }
