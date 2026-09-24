@@ -22,8 +22,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -89,10 +91,26 @@ internal class SearchCarScreen(
                 val isPlaying = item.mediaId.substringAfterLast('/') == nowPlayingId
                 itemListBuilder.addItem(
                     carContext.mediaRow(item, artwork[item.mediaId], isPlaying) {
-                        playViaBrowser(carContext, browserProvider(), item, TAG)
-                        // Land back on the playback screen, matching the classic surface
-                        screenManager.popToRoot()
-                        screenManager.push(NowPlayingCarScreen(carContext))
+                        screenScope.launch {
+                            try {
+                                browserProvider().await().setMediaItem(item)
+                                val selectedId = item.mediaId.substringAfterLast('/')
+                                val selected =
+                                    withTimeoutOrNull(8_000) {
+                                        handler.nowPlaying.first { it?.mediaId == selectedId }
+                                    }
+                                if (selected == null) {
+                                    Logger.e(TAG, "playItem(${item.mediaId}) did not become current")
+                                    return@launch
+                                }
+                                screenManager.popToRoot()
+                                screenManager.push(NowPlayingCarScreen(carContext))
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Logger.e(TAG, "playItem(${item.mediaId}) failed: ${e.message}")
+                            }
+                        }
                     },
                 )
             }

@@ -348,7 +348,7 @@ internal class SimpleMediaSessionCallback(
         scope.future(Dispatchers.IO) {
             LibraryResult.ofItemList(
                 searchTempList.map {
-                    it.toMediaItemWithoutPath()
+                    it.toMediaItemWithoutPath(SEARCH)
                 },
                 params,
             )
@@ -648,9 +648,19 @@ internal class SimpleMediaSessionCallback(
                 mediaItems.firstOrNull()?.mediaId?.split("/")
                     ?: return@future defaultResult
             when (path.firstOrNull()) {
-                SONG -> {
+                SONG, SEARCH -> {
                     val songId = path.getOrNull(1) ?: return@future defaultResult
-                    val firstQueue = songRepository.getSongById(songId).first()?.toTrack() ?: return@future defaultResult
+                    val firstQueue =
+                        if (path.first() == SEARCH) {
+                            searchTempList.firstOrNull { it.videoId == songId }
+                                ?: streamRepository.getFullMetadata(songId).lastOrNull()?.data
+                        } else {
+                            songRepository.getSongById(songId).first()?.toTrack()
+                                ?: streamRepository.getFullMetadata(songId).lastOrNull()?.data
+                        } ?: run {
+                            Logger.w(TAG, "onSetMediaItems: song unavailable for ${path.first()}/$songId")
+                            return@future defaultResult
+                        }
                     mediaPlayerHandler.setQueueData(
                         QueueData.Data(
                             listTracks = arrayListOf(firstQueue),
@@ -972,6 +982,7 @@ internal class SimpleMediaSessionCallback(
     companion object {
         const val ROOT = "root"
         const val SONG = "song"
+        const val SEARCH = "search"
         const val HOME = "home"
         const val ALBUM = "album"
         const val ONLINE_PLAYLIST = "online_playlist"
