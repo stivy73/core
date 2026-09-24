@@ -6,15 +6,20 @@ import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.common.Player
+import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.domain.utils.Resource
+import com.maxrave.media3.R
 import com.maxrave.media3.speech.OpenAiSongMeaningSpeech
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 internal class SongMeaningCarSpeech(
@@ -40,6 +45,7 @@ internal class SongMeaningCarSpeech(
         val expectedMediaId = current.mediaId
         val title = current.mediaMetadata.title?.toString().orEmpty()
         val artist = current.mediaMetadata.artist?.toString().orEmpty()
+        val durationSeconds = player.duration.takeIf { it != C.TIME_UNSET && it > 0 }?.div(1000)?.toInt()
         startedAt = SystemClock.elapsedRealtime()
         resumePlayback = player.isPlaying
         player.pause()
@@ -47,14 +53,14 @@ internal class SongMeaningCarSpeech(
         logTiming("tap", currentGeneration)
         requestJob =
             scope.launch {
-                val lyrics =
-                    repository
-                        .getSavedLyrics(expectedMediaId)
-                        .first()
-                        ?.lines
-                        ?.joinToString("\n") { it.words }
-                        ?.takeIf(String::isNotBlank)
+                val lyrics = resolveLyrics(expectedMediaId, title, artist, durationSeconds)
                 logTiming("lyrics_ready", currentGeneration)
+                if (currentGeneration != generation || player.currentMediaItem?.mediaId != expectedMediaId) return@launch
+                if (lyrics == null) {
+                    // Never ask the model to infer a meaning from the title alone.
+                    speakWithAndroid(context.getString(R.string.song_meaning_lyrics_unavailable), currentGeneration, onFinished)
+                    return@launch
+                }
                 val result = repository.getSongExplanation(title, artist, lyrics).first()
                 logTiming("explanation_ready", currentGeneration)
                 if (currentGeneration != generation || player.currentMediaItem?.mediaId != expectedMediaId) return@launch
@@ -68,6 +74,62 @@ internal class SongMeaningCarSpeech(
                     else -> speakWithAndroid(explanation, currentGeneration, onFinished)
                 }
             }
+    }
+
+    private suspend fun resolveLyrics(videoId: String, title: String, artist: String, durationSeconds: Int?): String? {
+        fun Lyrics?.text(): String? = this?.lines?.joinToString("\n") { it.words }?.takeIf(String::isNotBlank)
+
+        val saved =
+            try {
+                repository.getSavedLyrics(videoId).first()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TAG, "saved_lyrics_failed", error)
+                null
+            }
+        if (saved?.error == false) {
+            saved.lines?.joinToString("\n") { it.words }?.takeIf(String::isNotBlank)?.let { return it }
+        }
+
+        // The phone player fetches lyrics from the selected provider and saves them later.
+        // Android Auto can be opened before that save finishes, so use the same sources here.
+        val selected = dataStoreManager.lyricsProvider.first()
+        val sources =
+            buildList {
+                add(selected)
+                add(DataStoreManager.SIMPMUSIC)
+                if (dataStoreManager.spotifyLyrics.first() == DataStoreManager.TRUE) add("spotify")
+                add(DataStoreManager.LRCLIB)
+                add(DataStoreManager.BETTER_LYRICS)
+                add(DataStoreManager.YOUTUBE)
+            }.distinct()
+        for (source in sources) {
+            val text =
+                try {
+                    when (source) {
+                        DataStoreManager.SIMPMUSIC ->
+                            (repository.getSimpMusicLyrics(videoId).firstOrNull() as? Resource.Success<Lyrics>)?.data.text()
+                        DataStoreManager.LRCLIB ->
+                            (repository.getLrclibLyricsData(artist, title, durationSeconds).firstOrNull() as? Resource.Success<Lyrics>)?.data.text()
+                        DataStoreManager.BETTER_LYRICS ->
+                            (repository.getBetterLyrics(artist, title, durationSeconds).firstOrNull() as? Resource.Success<Lyrics>)?.data.text()
+                        DataStoreManager.YOUTUBE ->
+                            (repository.getYouTubeCaption(dataStoreManager.youtubeSubtitleLanguage.first(), videoId).firstOrNull() as? Resource.Success<Pair<Lyrics, Lyrics?>>)
+                                ?.data?.first.text()
+                        "spotify" ->
+                            (repository.getSpotifyLyrics(dataStoreManager, "$title $artist", durationSeconds).firstOrNull() as? Resource.Success<Lyrics>)?.data.text()
+                        else -> null
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(TAG, "lyrics_source_failed source=$source", error)
+                    null
+                }
+            if (text != null) return text
+        }
+        return null
     }
 
     fun stop(resume: Boolean = true) {
