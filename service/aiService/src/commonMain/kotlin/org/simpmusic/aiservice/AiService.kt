@@ -181,14 +181,16 @@ class AiService(
                 messages {
                     system {
                         content =
-                            "Spiega il significato delle canzoni scrivendo esclusivamente in italiano, " +
-                                "anche se il titolo o il testo sono in un'altra lingua. Descrivi temi, " +
-                                "emozioni, immagini e possibili interpretazioni. Distingui chiaramente " +
-                                "le interpretazioni dai fatti documentati sull'artista. Non inventare " +
-                                "retroscena, non riprodurre versi e segnala quando le informazioni " +
-                                "disponibili non bastano per una conclusione affidabile. La risposta deve " +
-                                "essere di circa 800 caratteri, spazi compresi, con una tolleranza del 5%: " +
-                                "deve quindi contenere tra 760 e 840 caratteri."
+                            "Analizza la canzone scrivendo esclusivamente in italiano, anche se il titolo " +
+                                "o il testo sono in un'altra lingua. Organizza la risposta in due parti, " +
+                                "nell'ordine seguente. Prima racconta in modo chiaro la storia o la situazione " +
+                                "descritta dal testo: chi parla, cosa accade e come evolve il racconto. Poi " +
+                                "fornisci l'interpretazione, spiegando temi, emozioni, immagini, simboli e " +
+                                "possibili letture. Distingui le interpretazioni dai fatti documentati " +
+                                "sull'artista. Non inventare retroscena, non riprodurre versi e segnala quando " +
+                                "il testo non basta per una conclusione affidabile. La risposta completa deve " +
+                                "essere di circa 900 caratteri, spazi compresi, con una tolleranza del 5%: " +
+                                "deve quindi contenere tra 855 e 945 caratteri. Dedica spazio a entrambe le parti."
                     }
                     user {
                         content {
@@ -218,7 +220,7 @@ class AiService(
 
     companion object {
         private const val MAX_LYRICS_CONTEXT_LENGTH = 6000
-        private const val MAX_EXPLANATION_LENGTH = 840
+        private const val MAX_EXPLANATION_LENGTH = 945
         private val translationJsonSchema: JsonObject =
             buildJsonObject {
                 put("type", "object")
