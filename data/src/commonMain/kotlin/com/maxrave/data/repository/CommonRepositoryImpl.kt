@@ -215,7 +215,7 @@ internal class CommonRepositoryImpl(
                 launch {
                     dataStoreManager.aiApiKey.collectLatest { apiKey ->
                         aiClient.apiKey =
-                            apiKey.ifEmpty {
+                            apiKey.trim().ifEmpty {
                                 null
                             }
                     }

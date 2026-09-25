@@ -665,7 +665,8 @@ internal class LyricsCanvasRepositoryImpl(
                 .onSuccess { explanation -> emit(Resource.Success(explanation)) }
                 .onFailure { throwable ->
                     Logger.e("Song meaning", "Error: ${throwable.message}")
-                    emit(Resource.Error("Unable to explain this song"))
+                    val invalidApiKey = throwable.message?.contains("Please pass a valid API key", ignoreCase = true) == true
+                    emit(Resource.Error(if (invalidApiKey) "invalid_ai_api_key" else "Unable to explain this song"))
                 }
         }.flowOn(Dispatchers.IO)
 
