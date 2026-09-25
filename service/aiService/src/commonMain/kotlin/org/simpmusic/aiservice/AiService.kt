@@ -212,15 +212,13 @@ class AiService(
             ?.message
             ?.content
             ?.trim()
-            ?.take(MAX_EXPLANATION_LENGTH)
-            ?.trimEnd()
+            ?.let(::limitSongExplanation)
             ?.takeIf { it.isNotEmpty() }
             ?: throw IllegalStateException("No response from AI")
     }
 
     companion object {
         private const val MAX_LYRICS_CONTEXT_LENGTH = 6000
-        private const val MAX_EXPLANATION_LENGTH = 945
         private val translationJsonSchema: JsonObject =
             buildJsonObject {
                 put("type", "object")
@@ -244,6 +242,23 @@ class AiService(
             )
     }
 }
+
+internal fun limitSongExplanation(text: String): String {
+    val cleaned = text.trim()
+    if (cleaned.length <= MAX_SONG_EXPLANATION_LENGTH) return cleaned
+
+    val candidate = cleaned.take(MAX_SONG_EXPLANATION_LENGTH)
+    val sentenceEnd =
+        candidate.indices.lastOrNull { index ->
+            index + 1 >= MIN_SONG_EXPLANATION_LENGTH &&
+                candidate[index] in ".!?" &&
+                (index == candidate.lastIndex || candidate[index + 1].isWhitespace())
+        }
+    return sentenceEnd?.let { candidate.take(it + 1).trimEnd() } ?: cleaned
+}
+
+private const val MIN_SONG_EXPLANATION_LENGTH = 855
+private const val MAX_SONG_EXPLANATION_LENGTH = 945
 
 @kotlinx.serialization.Serializable
 data class TranslationResponse(
