@@ -186,7 +186,8 @@ class AiService(
                                 "emozioni, immagini e possibili interpretazioni. Distingui chiaramente " +
                                 "le interpretazioni dai fatti documentati sull'artista. Non inventare " +
                                 "retroscena, non riprodurre versi e segnala quando le informazioni " +
-                                "disponibili non bastano per una conclusione affidabile."
+                                "disponibili non bastano per una conclusione affidabile. La risposta " +
+                                "deve essere sintetica e non deve superare 800 caratteri, spazi compresi."
                     }
                     user {
                         content {
@@ -208,12 +209,15 @@ class AiService(
             ?.message
             ?.content
             ?.trim()
+            ?.take(MAX_EXPLANATION_LENGTH)
+            ?.trimEnd()
             ?.takeIf { it.isNotEmpty() }
             ?: throw IllegalStateException("No response from AI")
     }
 
     companion object {
         private const val MAX_LYRICS_CONTEXT_LENGTH = 6000
+        private const val MAX_EXPLANATION_LENGTH = 800
         private val translationJsonSchema: JsonObject =
             buildJsonObject {
                 put("type", "object")
