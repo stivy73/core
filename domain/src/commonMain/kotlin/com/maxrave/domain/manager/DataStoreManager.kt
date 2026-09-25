@@ -406,6 +406,14 @@ interface DataStoreManager {
 
     val songMeaningTtsProvider: Flow<String>
 
+    suspend fun setGoogleTtsApiKey(apiKey: String)
+
+    val googleTtsApiKey: Flow<String>
+
+    suspend fun setSongMeaningVoiceStyle(style: String)
+
+    val songMeaningVoiceStyle: Flow<String>
+
     val useAITranslation: Flow<String>
 
     suspend fun setUseAITranslation(use: Boolean)
@@ -649,6 +657,10 @@ interface DataStoreManager {
         const val AI_PROVIDER_CUSTOM_OPENAI = "custom_openai"
         const val SONG_MEANING_TTS_ANDROID = "android"
         const val SONG_MEANING_TTS_OPENAI = "openai"
+        const val SONG_MEANING_TTS_GOOGLE = "google"
+        const val SONG_MEANING_STYLE_PROFESSIONAL = "professional"
+        const val SONG_MEANING_STYLE_DJ = "dj"
+        const val SONG_MEANING_STYLE_EMPATHETIC = "empathetic"
 
         const val LOCAL_PLAYLIST_FILTER_OLDER_FIRST = "older_first"
         const val LOCAL_PLAYLIST_FILTER_NEWER_FIRST = "newer_first"

@@ -8,9 +8,11 @@ import android.os.SystemClock
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.Base64
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -19,10 +21,17 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.put
 
 /** Plays OpenAI speech as it arrives, with a cache shared by the phone player and Android Auto. */
-class OpenAiSongMeaningSpeech(
+class CloudSongMeaningSpeech(
     private val context: Context,
     private val scope: CoroutineScope,
 ) {
@@ -97,6 +106,114 @@ class OpenAiSongMeaningSpeech(
             connection.disconnect()
             temporary.delete()
         }
+    }
+
+    suspend fun speakGemini(
+        text: String,
+        apiKey: String,
+        style: String,
+        beforePlayback: suspend () -> Unit = {},
+        onStage: (String) -> Unit = {},
+    ) = withContext(Dispatchers.IO) {
+        val expectedGeneration = generation
+        val cacheDirectory = File(context.cacheDir, CACHE_DIRECTORY).apply { mkdirs() }
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest((GEMINI_MODEL + GEMINI_VOICE + style + text).encodeToByteArray())
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        val target = File(cacheDirectory, "$digest.pcm")
+        if (target.length() > 0L) {
+            target.setLastModified(System.currentTimeMillis())
+            onStage("audio_cache_hit")
+            target.inputStream().use { playPcm(it, expectedGeneration, beforePlayback, onStage) }
+            return@withContext
+        }
+        currentCoroutineContext().ensureActive()
+        check(expectedGeneration == generation)
+        val connection = URL(GEMINI_URL).openConnection() as HttpURLConnection
+        activeConnection = connection
+        val temporary = File(cacheDirectory, "$digest-${SystemClock.elapsedRealtimeNanos()}.tmp")
+        try {
+            onStage("audio_request_started")
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            connection.doOutput = true
+            connection.setRequestProperty("x-goog-api-key", apiKey)
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Accept", "text/event-stream")
+            val body = buildJsonObject {
+                putJsonArray("contents") {
+                    add(buildJsonObject {
+                        put("role", "user")
+                        putJsonArray("parts") {
+                            add(buildJsonObject {
+                                put("text", text)
+                                putJsonObject("speech_metadata") { put("style", geminiStyle(style)) }
+                            })
+                        }
+                    })
+                }
+                putJsonObject("generationConfig") {
+                    putJsonArray("responseModalities") { add(kotlinx.serialization.json.JsonPrimitive("AUDIO")) }
+                    putJsonObject("speechConfig") {
+                        putJsonObject("voiceConfig") { put("voice", GEMINI_VOICE) }
+                    }
+                }
+            }.toString()
+            connection.outputStream.use { it.write(body.encodeToByteArray()) }
+            check(connection.responseCode in 200..299) { "Gemini TTS HTTP ${connection.responseCode}" }
+            onStage("audio_headers_ready")
+            connection.inputStream.bufferedReader().use { reader ->
+                GeminiPcmStream(reader).use { input ->
+                    FileOutputStream(temporary).use { cache ->
+                        playPcm(input, expectedGeneration, beforePlayback, onStage, cache)
+                    }
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            check(expectedGeneration == generation)
+            check(temporary.renameTo(target))
+            scope.launch(Dispatchers.IO) { pruneCache(cacheDirectory) }
+        } finally {
+            if (activeConnection === connection) activeConnection = null
+            connection.disconnect()
+            temporary.delete()
+        }
+    }
+
+    private fun geminiStyle(style: String): String = when (style) {
+        "dj" -> "Parla in italiano come un DJ radiofonico: energico, ritmato e coinvolgente, senza cantare."
+        "empathetic" -> "Parla in italiano con calore ed empatia, ritmo naturale e lievi esitazioni conversazionali come ehm, senza cambiare il significato."
+        else -> "Parla in italiano con tono professionale, chiaro e misurato."
+    }
+
+    /** Converts Gemini's SSE audio parts to the same raw PCM stream used by OpenAI playback. */
+    internal class GeminiPcmStream(private val reader: BufferedReader) : InputStream() {
+        private var chunk = ByteArray(0)
+        private var offset = 0
+
+        override fun read(): Int {
+            val one = ByteArray(1)
+            return if (read(one, 0, 1) < 0) -1 else one[0].toInt() and 0xff
+        }
+
+        override fun read(target: ByteArray, targetOffset: Int, length: Int): Int {
+            if (length == 0) return 0
+            while (offset >= chunk.size) {
+                val line = reader.readLine() ?: return -1
+                if (!line.startsWith("data:")) continue
+                val payload = line.removePrefix("data:").trim()
+                if (payload == "[DONE]") return -1
+                chunk = parseGeminiAudio(payload) ?: continue
+                offset = 0
+            }
+            val count = minOf(length, chunk.size - offset)
+            chunk.copyInto(target, targetOffset, offset, offset + count)
+            offset += count
+            return count
+        }
+
+        override fun close() = reader.close()
     }
 
     private suspend fun playPcm(
@@ -216,9 +333,20 @@ class OpenAiSongMeaningSpeech(
     }
 
     private companion object {
+        fun parseGeminiAudio(payload: String): ByteArray? = runCatching {
+            val parts = Json.parseToJsonElement(payload).jsonObject["candidates"]
+                ?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonObject?.get("parts")?.jsonArray
+            val encoded = parts?.firstNotNullOfOrNull { part ->
+                part.jsonObject["inlineData"]?.jsonObject?.get("data")?.jsonPrimitive?.contentOrNull
+            } ?: return@runCatching null
+            Base64.getDecoder().decode(encoded)
+        }.getOrNull()
         const val SPEECH_URL = "https://api.openai.com/v1/audio/speech"
         const val MODEL = "gpt-4o-mini-tts"
         const val VOICE = "marin"
+        const val GEMINI_MODEL = "gemini-3.8-flash-tts"
+        const val GEMINI_VOICE = "Kore"
+        const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:streamGenerateContent?alt=sse"
         const val INSTRUCTIONS = "Leggi in italiano con tono naturale, caldo e informativo."
         const val CACHE_DIRECTORY = "song_meaning_speech"
         const val SAMPLE_RATE = 24_000

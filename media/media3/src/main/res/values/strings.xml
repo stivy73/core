@@ -9,6 +9,7 @@
     <string name="shuffle">Shuffle</string>
     <string name="song_meaning">Significato della canzone</string>
     <string name="song_meaning_lyrics_unavailable">Non ho trovato il testo della canzone. Non posso interpretarla in modo affidabile.</string>
+    <string name="song_meaning_google_key_missing">Inserisci una chiave API Google nelle impostazioni per usare la voce Gemini.</string>
     <string name="stop_reading">Interrompi</string>
     <string name="notification_channel_name" translatable="false">SimpMusic Playback Notification</string>
     <string name="home">Home</string>

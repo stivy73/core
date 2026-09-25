@@ -13,7 +13,7 @@ import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.media3.R
-import com.maxrave.media3.speech.OpenAiSongMeaningSpeech
+import com.maxrave.media3.speech.CloudSongMeaningSpeech
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +31,7 @@ internal class SongMeaningCarSpeech(
 ) {
     private var requestJob: Job? = null
     private var textToSpeech: TextToSpeech? = null
-    private val openAiSpeech = OpenAiSongMeaningSpeech(context, scope)
+    private val openAiSpeech = CloudSongMeaningSpeech(context, scope)
     private var resumePlayback = false
     @Volatile private var generation = 0L
     @Volatile private var startedAt = 0L
@@ -71,6 +71,7 @@ internal class SongMeaningCarSpeech(
                 }
                 when (dataStoreManager.songMeaningTtsProvider.first()) {
                     DataStoreManager.SONG_MEANING_TTS_OPENAI -> speakWithOpenAi(explanation, currentGeneration, onFinished)
+                    DataStoreManager.SONG_MEANING_TTS_GOOGLE -> speakWithGoogle(explanation, currentGeneration, onFinished)
                     else -> speakWithAndroid(explanation, currentGeneration, onFinished)
                 }
             }
@@ -200,6 +201,22 @@ internal class SongMeaningCarSpeech(
             .onFailure { error ->
                 if (expectedGeneration == generation) Log.w(TAG, "speech_failed elapsedMs=${elapsedMs()}", error)
             }
+        if (expectedGeneration == generation) finish(onFinished)
+    }
+
+    private suspend fun speakWithGoogle(text: String, expectedGeneration: Long, onFinished: () -> Unit) {
+        val key = dataStoreManager.googleTtsApiKey.first().ifBlank {
+            if (dataStoreManager.aiProvider.first() == DataStoreManager.AI_PROVIDER_GEMINI) dataStoreManager.aiApiKey.first() else ""
+        }
+        if (key.isBlank()) {
+            speakWithAndroid(context.getString(R.string.song_meaning_google_key_missing), expectedGeneration, onFinished)
+            return
+        }
+        runCatching {
+            openAiSpeech.speakGemini(text, key, dataStoreManager.songMeaningVoiceStyle.first(), onStage = { stage -> logTiming(stage, expectedGeneration) })
+        }.onFailure { error ->
+            if (expectedGeneration == generation) Log.w(TAG, "gemini_speech_failed elapsedMs=${elapsedMs()}", error)
+        }
         if (expectedGeneration == generation) finish(onFinished)
     }
 
