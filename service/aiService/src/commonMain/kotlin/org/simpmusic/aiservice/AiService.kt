@@ -186,8 +186,9 @@ class AiService(
                                 "emozioni, immagini e possibili interpretazioni. Distingui chiaramente " +
                                 "le interpretazioni dai fatti documentati sull'artista. Non inventare " +
                                 "retroscena, non riprodurre versi e segnala quando le informazioni " +
-                                "disponibili non bastano per una conclusione affidabile. La risposta " +
-                                "deve essere sintetica e non deve superare 800 caratteri, spazi compresi."
+                                "disponibili non bastano per una conclusione affidabile. La risposta deve " +
+                                "essere di circa 800 caratteri, spazi compresi, con una tolleranza del 5%: " +
+                                "deve quindi contenere tra 760 e 840 caratteri."
                     }
                     user {
                         content {
@@ -217,7 +218,7 @@ class AiService(
 
     companion object {
         private const val MAX_LYRICS_CONTEXT_LENGTH = 6000
-        private const val MAX_EXPLANATION_LENGTH = 800
+        private const val MAX_EXPLANATION_LENGTH = 840
         private val translationJsonSchema: JsonObject =
             buildJsonObject {
                 put("type", "object")
