@@ -69,7 +69,9 @@ internal class SongMeaningCarSpeech(
                     finish(onFinished)
                     return@launch
                 }
-                when (dataStoreManager.songMeaningTtsProvider.first()) {
+                val ttsProvider = dataStoreManager.songMeaningTtsProvider.first()
+                Log.i(TAG, "tts_provider=$ttsProvider")
+                when (ttsProvider) {
                     DataStoreManager.SONG_MEANING_TTS_OPENAI -> speakWithOpenAi(explanation, currentGeneration, onFinished)
                     DataStoreManager.SONG_MEANING_TTS_GOOGLE -> speakWithGoogle(explanation, currentGeneration, onFinished)
                     else -> speakWithAndroid(explanation, currentGeneration, onFinished)
