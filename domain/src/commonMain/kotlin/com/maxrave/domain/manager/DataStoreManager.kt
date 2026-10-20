@@ -177,6 +177,7 @@ interface DataStoreManager {
      * Stored as text rather than ten keys because the bands are only ever read and written
      * together — a curve is one setting, not ten.
      */
+
     /**
      * Whether the equalizer is applied at all.
      *

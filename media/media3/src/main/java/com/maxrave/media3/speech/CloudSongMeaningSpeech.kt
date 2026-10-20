@@ -5,14 +5,6 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.SystemClock
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.BufferedReader
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
-import java.util.Base64
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,15 +12,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import kotlinx.serialization.json.put
+import java.io.BufferedReader
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
+import java.util.Base64
 
 /** Plays OpenAI speech as it arrives, with a cache shared by the phone player and Android Auto. */
 class CloudSongMeaningSpeech(
@@ -36,7 +36,9 @@ class CloudSongMeaningSpeech(
     private val scope: CoroutineScope,
 ) {
     @Volatile private var generation = 0L
+
     @Volatile private var activeConnection: HttpURLConnection? = null
+
     @Volatile private var audioTrack: AudioTrack? = null
 
     fun stop() {
@@ -56,7 +58,8 @@ class CloudSongMeaningSpeech(
         val expectedGeneration = generation
         val cacheDirectory = File(context.cacheDir, CACHE_DIRECTORY).apply { mkdirs() }
         val digest =
-            MessageDigest.getInstance("SHA-256")
+            MessageDigest
+                .getInstance("SHA-256")
                 .digest((MODEL + VOICE + INSTRUCTIONS + text).encodeToByteArray())
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) }
         val target = File(cacheDirectory, "$digest.pcm")
@@ -82,13 +85,14 @@ class CloudSongMeaningSpeech(
             connection.doOutput = true
             connection.setRequestProperty("Authorization", "Bearer $apiKey")
             connection.setRequestProperty("Content-Type", "application/json")
-            val body = buildJsonObject {
-                put("model", MODEL)
-                put("voice", VOICE)
-                put("input", text)
-                put("instructions", INSTRUCTIONS)
-                put("response_format", "pcm")
-            }.toString()
+            val body =
+                buildJsonObject {
+                    put("model", MODEL)
+                    put("voice", VOICE)
+                    put("input", text)
+                    put("instructions", INSTRUCTIONS)
+                    put("response_format", "pcm")
+                }.toString()
             connection.outputStream.use { it.write(body.encodeToByteArray()) }
             check(connection.responseCode in 200..299)
             onStage("audio_headers_ready")
@@ -117,9 +121,11 @@ class CloudSongMeaningSpeech(
     ) = withContext(Dispatchers.IO) {
         val expectedGeneration = generation
         val cacheDirectory = File(context.cacheDir, CACHE_DIRECTORY).apply { mkdirs() }
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest((GEMINI_MODEL + GEMINI_VOICE + style + text).encodeToByteArray())
-            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        val digest =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest((GEMINI_MODEL + GEMINI_VOICE + style + text).encodeToByteArray())
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
         val target = File(cacheDirectory, "$digest.pcm")
         if (target.length() > 0L) {
             target.setLastModified(System.currentTimeMillis())
@@ -141,25 +147,30 @@ class CloudSongMeaningSpeech(
             connection.setRequestProperty("x-goog-api-key", apiKey)
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Accept", "text/event-stream")
-            val body = buildJsonObject {
-                putJsonArray("contents") {
-                    add(buildJsonObject {
-                        put("role", "user")
-                        putJsonArray("parts") {
-                            add(buildJsonObject {
-                                put("text", text)
-                                putJsonObject("speech_metadata") { put("style", geminiStyle(style)) }
-                            })
-                        }
-                    })
-                }
-                putJsonObject("generationConfig") {
-                    putJsonArray("responseModalities") { add(kotlinx.serialization.json.JsonPrimitive("AUDIO")) }
-                    putJsonObject("speechConfig") {
-                        putJsonObject("voiceConfig") { put("voice", GEMINI_VOICE) }
+            val body =
+                buildJsonObject {
+                    putJsonArray("contents") {
+                        add(
+                            buildJsonObject {
+                                put("role", "user")
+                                putJsonArray("parts") {
+                                    add(
+                                        buildJsonObject {
+                                            put("text", text)
+                                            putJsonObject("speech_metadata") { put("style", geminiStyle(style)) }
+                                        },
+                                    )
+                                }
+                            },
+                        )
                     }
-                }
-            }.toString()
+                    putJsonObject("generationConfig") {
+                        putJsonArray("responseModalities") { add(kotlinx.serialization.json.JsonPrimitive("AUDIO")) }
+                        putJsonObject("speechConfig") {
+                            putJsonObject("voiceConfig") { put("voice", GEMINI_VOICE) }
+                        }
+                    }
+                }.toString()
             connection.outputStream.use { it.write(body.encodeToByteArray()) }
             check(connection.responseCode in 200..299) { "Gemini TTS HTTP ${connection.responseCode}" }
             onStage("audio_headers_ready")
@@ -181,14 +192,17 @@ class CloudSongMeaningSpeech(
         }
     }
 
-    private fun geminiStyle(style: String): String = when (style) {
-        "dj" -> "Parla in italiano come un DJ radiofonico: energico, ritmato e coinvolgente, senza cantare."
-        "empathetic" -> "Parla in italiano con calore ed empatia, ritmo naturale e lievi esitazioni conversazionali come ehm, senza cambiare il significato."
-        else -> "Parla in italiano con tono professionale, chiaro e misurato."
-    }
+    private fun geminiStyle(style: String): String =
+        when (style) {
+            "dj" -> "Parla in italiano come un DJ radiofonico: energico, ritmato e coinvolgente, senza cantare."
+            "empathetic" -> "Parla in italiano con calore ed empatia, ritmo naturale e lievi esitazioni conversazionali come ehm, senza cambiare il significato."
+            else -> "Parla in italiano con tono professionale, chiaro e misurato."
+        }
 
     /** Converts Gemini's SSE audio parts to the same raw PCM stream used by OpenAI playback. */
-    internal class GeminiPcmStream(private val reader: BufferedReader) : InputStream() {
+    internal class GeminiPcmStream(
+        private val reader: BufferedReader,
+    ) : InputStream() {
         private var chunk = ByteArray(0)
         private var offset = 0
 
@@ -197,7 +211,11 @@ class CloudSongMeaningSpeech(
             return if (read(one, 0, 1) < 0) -1 else one[0].toInt() and 0xff
         }
 
-        override fun read(target: ByteArray, targetOffset: Int, length: Int): Int {
+        override fun read(
+            target: ByteArray,
+            targetOffset: Int,
+            length: Int,
+        ): Int {
             if (length == 0) return 0
             while (offset >= chunk.size) {
                 val line = reader.readLine() ?: return -1
@@ -226,14 +244,17 @@ class CloudSongMeaningSpeech(
         val minBuffer = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(minBuffer > 0)
         val track =
-            AudioTrack.Builder()
+            AudioTrack
+                .Builder()
                 .setAudioAttributes(
-                    AudioAttributes.Builder()
+                    AudioAttributes
+                        .Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build(),
                 ).setAudioFormat(
-                    AudioFormat.Builder()
+                    AudioFormat
+                        .Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .setSampleRate(SAMPLE_RATE)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
@@ -333,14 +354,30 @@ class CloudSongMeaningSpeech(
     }
 
     private companion object {
-        fun parseGeminiAudio(payload: String): ByteArray? = runCatching {
-            val parts = Json.parseToJsonElement(payload).jsonObject["candidates"]
-                ?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonObject?.get("parts")?.jsonArray
-            val encoded = parts?.firstNotNullOfOrNull { part ->
-                part.jsonObject["inlineData"]?.jsonObject?.get("data")?.jsonPrimitive?.contentOrNull
-            } ?: return@runCatching null
-            Base64.getDecoder().decode(encoded)
-        }.getOrNull()
+        fun parseGeminiAudio(payload: String): ByteArray? =
+            runCatching {
+                val parts =
+                    Json
+                        .parseToJsonElement(payload)
+                        .jsonObject["candidates"]
+                        ?.jsonArray
+                        ?.firstOrNull()
+                        ?.jsonObject
+                        ?.get("content")
+                        ?.jsonObject
+                        ?.get("parts")
+                        ?.jsonArray
+                val encoded =
+                    parts?.firstNotNullOfOrNull { part ->
+                        part.jsonObject["inlineData"]
+                            ?.jsonObject
+                            ?.get("data")
+                            ?.jsonPrimitive
+                            ?.contentOrNull
+                    } ?: return@runCatching null
+                Base64.getDecoder().decode(encoded)
+            }.getOrNull()
+
         const val SPEECH_URL = "https://api.openai.com/v1/audio/speech"
         const val MODEL = "gpt-4o-mini-tts"
         const val VOICE = "marin"

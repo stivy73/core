@@ -1329,7 +1329,15 @@ internal class DataStoreManagerImpl(
 
     override val songMeaningTtsProvider: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[SONG_MEANING_TTS_PROVIDER] ?: DataStoreManager.SONG_MEANING_TTS_ANDROID
+            // A saved preference always wins over the Gemini onboarding default.
+            preferences[SONG_MEANING_TTS_PROVIDER] ?: if (
+                (preferences[AI_PROVIDER] ?: AI_PROVIDER_GEMINI) == AI_PROVIDER_GEMINI &&
+                !preferences[AI_API_KEY].isNullOrBlank()
+            ) {
+                DataStoreManager.SONG_MEANING_TTS_GOOGLE
+            } else {
+                DataStoreManager.SONG_MEANING_TTS_ANDROID
+            }
         }
 
     override suspend fun setGoogleTtsApiKey(apiKey: String) {
@@ -1344,7 +1352,16 @@ internal class DataStoreManagerImpl(
     }
 
     override val songMeaningVoiceStyle: Flow<String> =
-        settingsDataStore.data.map { it[SONG_MEANING_VOICE_STYLE] ?: DataStoreManager.SONG_MEANING_STYLE_PROFESSIONAL }
+        settingsDataStore.data.map { preferences ->
+            preferences[SONG_MEANING_VOICE_STYLE] ?: if (
+                (preferences[AI_PROVIDER] ?: AI_PROVIDER_GEMINI) == AI_PROVIDER_GEMINI &&
+                !preferences[AI_API_KEY].isNullOrBlank()
+            ) {
+                DataStoreManager.SONG_MEANING_STYLE_EMPATHETIC
+            } else {
+                DataStoreManager.SONG_MEANING_STYLE_PROFESSIONAL
+            }
+        }
 
     override val useAITranslation: Flow<String> =
         settingsDataStore.data.map { preferences ->

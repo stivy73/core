@@ -108,7 +108,10 @@ internal class DelegatingForwardingPlayer(
 
     override fun getPlaybackState(): Int {
         val state = super.getPlaybackState()
-        if (state == Player.STATE_ENDED && suppressPlaybackEnded) {
+        // Media3 (including CastPlayer's ForwardingSimpleBasePlayer) rejects
+        // BUFFERING with an empty timeline. Queue replacement, such as starting a
+        // radio, can empty the delegate while the track-transition flag is still set.
+        if (state == Player.STATE_ENDED && suppressPlaybackEnded && !super.getCurrentTimeline().isEmpty) {
             return Player.STATE_BUFFERING
         }
         return state

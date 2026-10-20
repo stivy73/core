@@ -1054,6 +1054,8 @@ internal class CrossfadeExoPlayerAdapter(
 
     override fun clearMediaItems() {
         coroutineScope.launch {
+            // This is a queue reset, not a gap between two tracks in the same queue.
+            forwardingPlayer.suppressPlaybackEnded = false
             playlist.clear()
             localCurrentMediaItemIndex = -1
             clearShuffleOrder()
