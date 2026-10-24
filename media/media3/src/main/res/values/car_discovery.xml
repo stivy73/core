@@ -1,0 +1,10 @@
+<resources>
+    <string name="car_search_hint">Search songs, artists or albums</string>
+    <string name="car_search_songs">Songs</string>
+    <string name="car_search_artists">Artists</string>
+    <string name="car_search_albums">Albums</string>
+    <string name="car_open_album">Open album</string>
+    <string name="car_open_artist">Open artist</string>
+    <string name="car_catalog_error">Unable to load artist</string>
+    <string name="car_catalog_empty">No albums or singles found</string>
+</resources>

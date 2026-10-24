@@ -1,5 +1,6 @@
 package com.maxrave.media3.carapp
 
+import android.content.ComponentName
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.media.model.MediaPlaybackTemplate
@@ -11,11 +12,15 @@ import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.media3.common.Player
+import androidx.media3.session.MediaBrowser
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import com.maxrave.common.Config.MAIN_PLAYER
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.media3.R
+import com.maxrave.media3.service.SimpleMediaService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +41,13 @@ internal class NowPlayingCarScreen(
     carContext: CarContext,
 ) : Screen(carContext),
     KoinComponent {
+    private val browserFuture by lazy {
+        MediaBrowser.Builder(carContext, SessionToken(carContext, ComponentName(carContext, SimpleMediaService::class.java))).buildAsync()
+    }
+    private var browserOpened = false
+
+    private fun browser() = browserFuture.also { browserOpened = true }
+
     private val handler: MediaPlayerHandler by inject()
     private val player: Player by inject(named(MAIN_PLAYER))
     private val lyricsCanvasRepository: LyricsCanvasRepository by inject()
@@ -55,6 +67,7 @@ internal class NowPlayingCarScreen(
         lifecycle.addObserver(
             object : DefaultLifecycleObserver {
                 override fun onDestroy(owner: LifecycleOwner) {
+                    if (browserOpened) MediaController.releaseFuture(browserFuture)
                     songMeaningSpeech.stop()
                     screenScope.cancel()
                 }
@@ -62,6 +75,9 @@ internal class NowPlayingCarScreen(
         )
         screenScope.launch {
             handler.queueData.collect { invalidate() }
+        }
+        screenScope.launch {
+            handler.nowPlayingState.collect { invalidate() }
         }
     }
 
@@ -71,12 +87,35 @@ internal class NowPlayingCarScreen(
                 ?.data
                 ?.playlistName
                 ?.takeIf { it.isNotBlank() }
+        val song = handler.nowPlayingState.value.songEntity
+        val header = Header.Builder().setTitle(queueTitle ?: "Queue")
+        song?.albumId?.takeIf { it.isNotBlank() }?.let { id ->
+            header.addEndHeaderAction(
+                Action
+                    .Builder()
+                    .setTitle(carContext.getString(R.string.car_open_album))
+                    .setIcon(CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.baseline_album_24)).build())
+                    .setOnClickListener { screenManager.push(MediaListCarScreen(carContext, ::browser, "album/$id", song.albumName.orEmpty())) }
+                    .build(),
+            )
+        }
+        song?.artistId?.firstOrNull { it.isNotBlank() }?.let { id ->
+            header.addEndHeaderAction(
+                Action
+                    .Builder()
+                    .setTitle(carContext.getString(R.string.car_open_artist))
+                    .setIcon(CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_car_artist)).build())
+                    .setOnClickListener {
+                        screenManager.push(
+                            ArtistCarScreen(carContext, ::browser, id, song.artistName?.firstOrNull().orEmpty()),
+                        )
+                    }.build(),
+            )
+        }
         return MediaPlaybackTemplate
             .Builder()
             .setHeader(
-                Header
-                    .Builder()
-                    .setTitle(queueTitle ?: "Queue")
+                header
                     .addEndHeaderAction(
                         Action
                             .Builder()
@@ -88,8 +127,7 @@ internal class NowPlayingCarScreen(
                             ).setOnClickListener {
                                 screenManager.push(SongMeaningCarScreen(carContext, songMeaningSpeech))
                             }.build(),
-                    )
-                    .addEndHeaderAction(
+                    ).addEndHeaderAction(
                         Action
                             .Builder()
                             .setIcon(
