@@ -1,0 +1,3 @@
+<resources>
+    <string name="car_ai_quota_exceeded">The AI text model has reached the project quota. In the phone settings, select gemini-3.5-flash-lite or check your Google quota.</string>
+</resources>

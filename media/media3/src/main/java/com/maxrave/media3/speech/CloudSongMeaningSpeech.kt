@@ -144,7 +144,7 @@ class CloudSongMeaningSpeech(
             connection.connectTimeout = 15_000
             connection.readTimeout = 60_000
             connection.doOutput = true
-            connection.setRequestProperty("x-goog-api-key", apiKey)
+            connection.setRequestProperty("x-goog-api-key", apiKey.trim())
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Accept", "text/event-stream")
             val body =

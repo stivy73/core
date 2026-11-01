@@ -102,9 +102,11 @@ class AiService(
                             "TASK:\n" +
                             "- You will receive a JSON object where keys are line indices and values are lyrics text.\n" +
                             "- FIRST, detect the dominant language of the input lyrics.\n" +
-                            "- If the detected language is the SAME as the target language code, return an EMPTY \"translations\" object. Do NOT translate. Do NOT paraphrase.\n" +
+                            "- If the detected language is the SAME as the target language code, return an EMPTY " +
+                            "\"translations\" object. Do NOT translate. Do NOT paraphrase.\n" +
                             "- Otherwise, translate ONLY the values to the target language.\n" +
-                            "- When translating: keep ALL keys exactly the same, output MUST have the EXACT same number of entries as the input, do NOT merge/split/add/remove any entries, and preserve the song's meaning, tone, and emotion.\n" +
+                            "- When translating: keep ALL keys exactly the same, output MUST have the EXACT same number of " +
+                            "entries as the input, do NOT merge/split/add/remove any entries, and preserve the song's meaning, tone, and emotion.\n" +
                             "\n" +
                             "OUTPUT:\n" +
                             "- A JSON object with the \"translations\" field containing the same keys mapped to translated values (or an empty object when the input is already in the target language)."
@@ -142,25 +144,26 @@ class AiService(
         }
 
         // Map translated text back to original lines, preserving all timestamps
-        val translatedLines = lines.mapIndexed { index, originalLine ->
-            val translatedWords = translatedMap[index.toString()]
-            if (translatedWords != null) {
-                Line(
-                    startTimeMs = originalLine.startTimeMs,
-                    endTimeMs = originalLine.endTimeMs,
-                    words = translatedWords,
-                    syllables = null,
-                )
-            } else {
-                // Non-translatable line (empty or ♫): keep original
-                Line(
-                    startTimeMs = originalLine.startTimeMs,
-                    endTimeMs = originalLine.endTimeMs,
-                    words = originalLine.words,
-                    syllables = originalLine.syllables,
-                )
+        val translatedLines =
+            lines.mapIndexed { index, originalLine ->
+                val translatedWords = translatedMap[index.toString()]
+                if (translatedWords != null) {
+                    Line(
+                        startTimeMs = originalLine.startTimeMs,
+                        endTimeMs = originalLine.endTimeMs,
+                        words = translatedWords,
+                        syllables = null,
+                    )
+                } else {
+                    // Non-translatable line (empty or ♫): keep original
+                    Line(
+                        startTimeMs = originalLine.startTimeMs,
+                        endTimeMs = originalLine.endTimeMs,
+                        words = originalLine.words,
+                        syllables = originalLine.syllables,
+                    )
+                }
             }
-        }
 
         return Lyrics(
             error = false,
@@ -175,22 +178,31 @@ class AiService(
         lyrics: String?,
     ): String {
         val lyricsContext = lyrics?.trim()?.take(MAX_LYRICS_CONTEXT_LENGTH)
+        val instructions =
+            "Analizza la canzone scrivendo esclusivamente in italiano, anche se il titolo " +
+                "o il testo sono in un'altra lingua. Organizza la risposta in due parti, " +
+                "nell'ordine seguente. Prima racconta in modo chiaro la storia o la situazione " +
+                "descritta dal testo: chi parla, cosa accade e come evolve il racconto. Poi " +
+                "fornisci l'interpretazione, spiegando temi, emozioni, immagini, simboli e " +
+                "possibili letture. Distingui le interpretazioni dai fatti documentati " +
+                "sull'artista. Non inventare retroscena, non riprodurre versi e segnala quando " +
+                "il testo non basta per una conclusione affidabile. La risposta completa deve " +
+                "essere di circa 900 caratteri, spazi compresi, con una tolleranza del 5%: " +
+                "deve quindi contenere tra 855 e 945 caratteri. Dedica spazio a entrambe le parti."
+        if (aiHost == AIHost.GEMINI) {
+            val context =
+                lyricsContext?.let { "Testo della canzone, solo come contesto:\n$it" }
+                    ?: "Il testo non è disponibile. Basati solo sul titolo e sull’artista."
+            return limitSongExplanation(
+                generateGeminiText(apiKey, model.id, "Canzone: $title\nArtista: $artist\n$context", systemInstruction = instructions),
+            )
+        }
         val request =
             chatCompletionRequest {
                 this.model = this@AiService.model
                 messages {
                     system {
-                        content =
-                            "Analizza la canzone scrivendo esclusivamente in italiano, anche se il titolo " +
-                                "o il testo sono in un'altra lingua. Organizza la risposta in due parti, " +
-                                "nell'ordine seguente. Prima racconta in modo chiaro la storia o la situazione " +
-                                "descritta dal testo: chi parla, cosa accade e come evolve il racconto. Poi " +
-                                "fornisci l'interpretazione, spiegando temi, emozioni, immagini, simboli e " +
-                                "possibili letture. Distingui le interpretazioni dai fatti documentati " +
-                                "sull'artista. Non inventare retroscena, non riprodurre versi e segnala quando " +
-                                "il testo non basta per una conclusione affidabile. La risposta completa deve " +
-                                "essere di circa 900 caratteri, spazi compresi, con una tolleranza del 5%: " +
-                                "deve quindi contenere tra 855 e 945 caratteri. Dedica spazio a entrambe le parti."
+                        content = instructions
                     }
                     user {
                         content {

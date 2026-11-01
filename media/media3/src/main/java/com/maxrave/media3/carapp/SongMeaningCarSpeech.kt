@@ -66,6 +66,10 @@ internal class SongMeaningCarSpeech(
                 if (currentGeneration != generation || player.currentMediaItem?.mediaId != expectedMediaId) return@launch
                 val explanation = (result as? Resource.Success)?.data.orEmpty()
                 if (explanation.isBlank()) {
+                    if (result.message == "ai_quota_exceeded") {
+                        speakWithAndroid(context.getString(R.string.car_ai_quota_exceeded), currentGeneration, onFinished)
+                        return@launch
+                    }
                     finish(onFinished)
                     return@launch
                 }

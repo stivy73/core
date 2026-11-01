@@ -2,6 +2,7 @@
 
 package com.maxrave.data.repository
 
+import org.simpmusic.aiservice.songMeaningFailureCode
 import com.maxrave.data.db.datasource.LocalDataSource
 import com.maxrave.data.mapping.toCanvasResult
 import com.maxrave.data.mapping.toLyrics
@@ -664,9 +665,9 @@ internal class LyricsCanvasRepositoryImpl(
                 .explainSong(title, artist, lyrics)
                 .onSuccess { explanation -> emit(Resource.Success(explanation)) }
                 .onFailure { throwable ->
-                    Logger.e("Song meaning", "Error: ${throwable.message}")
-                    val invalidApiKey = throwable.message?.contains("Please pass a valid API key", ignoreCase = true) == true
-                    emit(Resource.Error(if (invalidApiKey) "invalid_ai_api_key" else "Unable to explain this song"))
+                    val code = songMeaningFailureCode(throwable)
+                    Logger.e("Song meaning", "Error: $code")
+                    emit(Resource.Error(code))
                 }
         }.flowOn(Dispatchers.IO)
 
